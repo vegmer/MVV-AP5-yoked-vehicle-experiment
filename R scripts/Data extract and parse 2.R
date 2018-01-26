@@ -1,7 +1,4 @@
-##########################################
-### Experiment 2b: Yoked vehicle group ###
-### DATA EXTRACT AND PARSE             ###
-##########################################
+#CS PLUS MV ANALYSIS
 
 #Call necessary packages
 library("matrixStats")
@@ -9,21 +6,16 @@ library("plyr")
 library("dplyr")
 library("ggplot2")
 
-# Set working directory
-# setwd("C:/Users/Mercedes/Dropbox/DISSERTATION/Experiment 2b/Training/")
-
-####################################
-### 1. BEHAVIOR DURING TRAINING  ###
-####################################
-
-# Load the MedPC files
-datafolder = paste(getwd(), "/Raw files/Training/", sep="")
+setwd("C:/Users/mvega/Dropbox/DISSERTATION/")
+datafolder = paste(getwd(), "/Experiment 2b/Test/Raw data/", sep="")
 datafiles = list.files(datafolder)
 
-##Use the mpcextract function to extract data from MedPC file###
 
+##Extract function to extract data from MedPC file###
 mpcextract.Rfunc=function(filename){
+        
         rawin = scan(filename, what = "raw", sep = "\n")
+        
         singlevars = grep("^[A-Z]{1}:[[:space:]]{0,}[0-9]", rawin)
         arrayvars = grep("^[A-Z]{1}:$", rawin)
         listout = list(info = as.vector(rawin[c(1:10)]))
@@ -65,7 +57,13 @@ for (i in 1:length(datafiles)){
         
         ##EXTRACTION
         rawin =  mpcextract.Rfunc(toextract)
-        subject = substring(rawin$info[grep("Subject:",rawin$info)],10, last= 1000000L)
+        
+        subject = substring(rawin$info[grep("Subject:",rawin$info)],10, last= 1000000L) 
+        
+        #grep("Subject:",rawin$info) indicates the row in raw$info in which "Subject:" is (i.e. 4)
+        #rawin$info[grep("Subject:", rawin$info)] indicates the text in that row
+        #rawin$info[grep("Subject:", rawin$info)],10, last=10000000000) indicates to select what is after 10 caracters but before the last 1000000
+        
         session = substring(rawin$info[grep("Experiment:",rawin$info)],13, last= 1000000L)
         group = substring(rawin$info[grep("Group:",rawin$info)],7, last= 1000000L)
         filename  = datafiles[i]
@@ -78,6 +76,9 @@ for (i in 1:length(datafiles)){
                         exits = rawin[[which(names(rawin) == "x")]]
         )
         
+        #This indicates to create a list in which variable with the name "y" in the object "rawin" is going to be called "cuestart"...
+        
+        # rm(rawin)
         csacqidx$subject[i]= subject
         csacqidx$session[i]= session
         csacqidx$group[i]= group
@@ -88,10 +89,10 @@ for (i in 1:length(datafiles)){
 
 
 
-#####Parse data: create an object with more detailed behavioral data
-
+#####Parse data
 parseddata = list()
 lengthITI = c()
+
 
 #Establish session bins
 sessionbinsize=300
@@ -137,6 +138,7 @@ for(i in 1:nrow(csacqidx)){
         uniquetrial=c(TRUE, entries$trialno!=c(entries$trialno[-1], NA))
         entries$uniquetrial=uniquetrial[1: length(entries$trialno)]
         entries$trialstart = trials$start[entries$trialno]
+        entries$cueend = trials$start[entries$trialno]+trials$latency[entries$trialno]
         entries$diffEnt = entries$ent - entries$trialstart
         entries$diffExit = entries$exit - entries$trialstart
         entries$diffEnt[which(abs(entries$diffEnt)>15)]=NA
@@ -147,7 +149,7 @@ for(i in 1:nrow(csacqidx)){
         entries$latITI = entries$ent-entries$randomITI
         entries$latITI [which (entries$RandomHE==FALSE)] = 10
         
-        #For previoius data frame
+        #For previous data frame: # of ITI entries
         numITIentries <- c()
         for(j in 1:length(trials$trial)){
                 if(trials$reward[j]==F){
@@ -158,8 +160,22 @@ for(i in 1:nrow(csacqidx)){
                 }
                 numITIentries <- c(numITIentries, ITIcount)
         }
-        
         trials$numITIentries=numITIentries
+        
+        # PreCueDur <- c()
+        # PostCueDur <- c()
+        # for(j in 1:length(entries$ent)){
+        #   if(entries$ent[j]<entries$cueend[j]){PostDur <- 0}
+        #   if(entries$ent[j] >= entries$cueend[j] & entries$ent[j]<wdw){
+        #     PostDur <- entries$exit[j]-entries$ent[j]
+        #     excess <- entries$exit[j]-(entries$cueend[j]+wdw)
+        #     if(excess>0){
+        #       PostDur <- PostDur-excess
+        #     }
+        #   }
+        #   PostCueDur <- c(PostCueDur, PostDur)
+        # }
+        # entries$PostCueDur=PostCueDur
         
         
         # ITI comparison data frame
@@ -189,11 +205,9 @@ for(i in 1:nrow(csacqidx)){
         parseddata[[i]]= list(trials = trials, entries = entries, ITIcomparison = ITIcomparison, TotalITI=TotalITI)
 }
 
+### New data frame to analyze the duration of entries during random 10s ITI period vs. after cue end
+window <- 10
 
-##############################################################
-### DIFFERENCE OF TIME INSIDE RECEPTACLE BEFORE AND AFTER CUE
-##############################################################
-window <- 10 #cue length
 
 DurEntries <- list()
 for(i in 1:length(csacqdata)){
@@ -203,12 +217,7 @@ for(i in 1:length(csacqdata)){
         
         
         ### MAKING A DATA FRAME WITH INFO ABOUT TIME SPENT IN RECEPTACLE BEFORE AND AFTER CUE END
-        TimeIn <- data.frame(bin=findInterval(dat$cuestart, sessionticks), 
-                             trial=1:length(dat$cuestart), cuestart=dat$cuestart, 
-                             cueend=dat$cueend, postCueInt=dat$cueend+window, 
-                             preCueInt=dat$cuestart-window, PostCueDur=NA, 
-                             PostCueDurPerc=NA, PreCueDur=NA, PreCueDurPerc=NA, 
-                             DurDiff=NA, DurDiffPerc=NA)
+        TimeIn <- data.frame(bin=findInterval(dat$cuestart, sessionticks), trial=1:length(dat$cuestart), cuestart=dat$cuestart, cueend=dat$cueend, postCueInt=dat$cueend+window, preCueInt=dat$cuestart-window, PostCueDur=NA, PostCueDurPerc=NA, PreCueDur=NA, PreCueDurPerc=NA, DurDiff=NA, DurDiffPerc=NA)
         
         #BEFORE CUE END    
         corresp <- findInterval(dat$entries, dat$cueend) #for each element in dat$entries, which "cueend"(trial) they correspond to
@@ -238,6 +247,7 @@ for(i in 1:length(csacqdata)){
         
         
         ### BEFORE CUE START
+        
         corresp <- findInterval(dat$entries, dat$cuestart-window) #for each element in dat$entries, which "cueend"(trial) they correspond to
         DUR <- c()
         for(j in 1:length(dat$entries)){
@@ -271,13 +281,10 @@ for(i in 1:length(csacqdata)){
 #### CALCULATE SUM OF THE DIFFERENCE BETWEEN TIME SPENT IN COMPT 10S AFTER CUE VS. BEFORE CUE IN THE FIRST BIN OF TRIALS FOR EACH ANIMAL
 topBin <- 2 #Bin to analyze (e.g. if topBin=2, only the first bin will)
 durDiffEach <- c()
-durDiffPerTrial <- c()
 for(i in 1:length(DurEntries)){
         sel <- DurEntries[[i]]$TimeIn %>% filter(bin<topBin)
         calc <- sum(sel$DurDiff)
-        calc2 <- calc/length(sel$trial)
         durDiffEach <- c(durDiffEach, calc)
-        durDiffPerTrial <- c(durDiffPerTrial, calc2)
 }
 
 PreCueEach <- c()
@@ -295,12 +302,8 @@ for(i in 1:length(DurEntries)){
 }
 
 csacqidx$durDiffBin1 <- durDiffEach
-csacqidx$durDiffPerTrialBin1 <- durDiffPerTrial
 csacqidx$PreCueDurSumBin1 <- PreCueEach
 csacqidx$PostCueDurSumBin1 <- PostCueEach
-
-
-
 
 #### CALCULATE SUM OF THE DIFFERENCE BETWEEN TIME SPENT IN COMPT 10S AFTER CUE VS. BEFORE CUE IN FIRST 44 TRIALS
 minNoTrials <- 44 #This tells us the minimum number of trials all animals got (because some animals got more, and we don't want to count those extra trials since this is a SUM across trials)
@@ -331,7 +334,108 @@ csacqidx$PreCueDurSUMALLTRIALS<- PreCueEach
 csacqidx$PostCueDurSUMALLTRIALS <- PostCueEach
 
 
+### PROB ENTRY POST VS PRE CUE
 
+# dw <- seq(0, 10, by=0.1)
+# 
+# IntervalsPreCue <- list()
+# IntervalsPostCue <- list()
+# IntervalsDF <- list()
+# EntryPreCue <- c()
+# EntryPostCue <- c()
+# probPrePost <- list()
+# 
+# for(i in 1:nrow(csacqidx)){
+#   toanalyze = csacqdata[[i]]
+#   if(length(toanalyze$cueend)<length(toanalyze$cuestart))(toanalyze$cueend= c(toanalyze$cueend, 1800))
+#   if(length(toanalyze$exits)<length(toanalyze$ent))(toanalyze$exits= c(toanalyze$exits, 1800))
+#   
+#   #For each of the i sessions in csacqidx, I'm going to make 101 data frames (using a detection window from 0-10s in 0.1s increases gives us 101 intervals to use as detection windows. Each one of these dataframes is going to include: trial (trial number), cue start, Interval Pre cue (the cue start minus the detection window) and interval post cue (cue start plus detection window)). The object with all of these dataframes for each session is going to be called "IntervalsDF" and, in order to subset it, I need a double bracket.
+#   
+#   probPre <- c()
+#   probPost <- c()
+#   probPreVSPost <- c()
+#   
+#   for(j in 1:length(dw)){
+#     pre <- toanalyze$cuestart-dw[j]
+#     post <- toanalyze$cuestart+dw[j]
+#     IntervalsPreCue[j] <- list(pre)
+#     IntervalsPostCue[j] <- list(post)
+#     IntervalsDF[j] = list(data.frame(
+#       trial=1:length(toanalyze$cuestart),
+#       cuestart=toanalyze$cuestart,
+#       IntervalPreCue=toanalyze$cuestart-dw[j],
+#       IntervalPostCue=toanalyze$cuestart+dw[j]
+#     ))
+#     
+#     #Once I have that object (IntervalsDF), I am going to add two columns to it: one saying if there is any entry during the "pre" interval and another one saying if there's any entry during the "post" interval. 
+#     
+#     testPre2 <- c()
+#     testPost2 <- c()
+#     
+#     for(l in 1:length(IntervalsDF[[j]]$cuestart)){
+#       if(length(subset(toanalyze$entries, toanalyze$entries  > IntervalsDF[[j]]$IntervalPreCue[l] & toanalyze$entries <= IntervalsDF[[j]]$cuestart[l]))>=1){testPre <- TRUE} else {testPre <- FALSE}
+#       if(length(subset(toanalyze$entries, toanalyze$entries  < IntervalsDF[[j]]$IntervalPostCue[l] & toanalyze$entries >= IntervalsDF[[j]]$cuestart[l]))>=1){testPost <- TRUE} else {testPost <- FALSE}
+#       
+#       testPre2<- c(testPre2, testPre)
+#       testPost2<- c(testPost2, testPost)
+#     }
+#     
+#     IntervalsDF[[j]]$TestPre <- testPre2
+#     IntervalsDF[[j]]$TestPost <- testPost2
+#     
+#     #Now, for each IntervalsDF data frame (remember, I have 101 per session, one per detection window), I'm going to calculate the proportion of trials in which the animal made a head entry given that detection window before (probPre) and after (probPost) the cue.
+#     probPre <- c(probPre, length(IntervalsDF[[j]]$TestPre[which(IntervalsDF[[j]]$TestPre==TRUE)])/length(IntervalsDF[[j]]$TestPre))
+#     probPost<- c(probPost, length(IntervalsDF[[j]]$TestPost[which(IntervalsDF[[j]]$TestPost==TRUE)])/length(IntervalsDF[[j]]$TestPost))
+#   }
+#   probPreVSPost <- c(probPreVSPost, probPost-probPre)
+#   
+#   #Now let's make a data frame with the detection window and the probability of "precue entry" and "postCue entry" for each one of those windows during that session. We'll make a list of data frames (one per session). Note: This might take a while, be patient!  
+#   summaryProbPrePost <- data.frame(detectionWindow=dw, probabilityPre=probPre, probabilityPost=probPost, probPreVSPost = probPreVSPost)
+#   
+#   probPrePost[[i]] <- list(probPrePost = summaryProbPrePost)
+# }
+# 
+# 
+# #SaVING THIS OBJECT FOR FUTURE USE (RECOMMENDED SINCE IT TAKES TIME TO COMPUTE)
+# save(probPrePost, file = paste(getwd(), "/Experiment 2b/Test/Data for R/probPrePost.rdat", sep=""))
+# 
+# 
+# #### Now I want to come up with some kind of "Area under the curve" metric. I'm going to add ALL of the values for probPOSTcue-probPREcue and create a vector with those values
+# 
+# sumProbPreVSPost <- c()
+# 
+# for(i in 1:length(probPrePost)){
+#   sumProbPreVSPost <- c(sumProbPreVSPost, sum(probPrePost[[i]]$probPrePost$probPreVSPost))
+# }
+# 
+# csacqidx$sumProbPreVSPost <- sumProbPreVSPost
+# 
+# 
+# 
+# ############################################
+# #ANALYSIS 5. 15 LAST MINUTES             ###
+# ############################################
+# 
+# sessionbinsize=300
+# sessionticks=seq(0, 1800, by = sessionbinsize)
+# findInterval(csacqdata[[1]]$cuestart, sessionticks)
+# 
+# sessionbybin<- c()
+# for(i in 1:length(parseddata)){
+#   
+#   c(sessionbybin, (data.frame(
+#     sessionbin=findInterval(parseddata[[i]]$trials$start, sessionticks), 
+#     cuestart=parseddata[[i]]$trials$start,
+#     reward=parseddata[[i]]$trials$reward,
+#     latency=parseddata[[i]]$trials$latency,
+#     lengthITI=parseddata[[i]]$trials$lengthITI,
+#     randomITI=parseddata[[i]]$trials$randomITI,
+#     randomITIend=parseddata[[i]]$trials$randomITIend
+#   )))
+# }
+# 
+# 
 
 ##############################################################
 #ANALYSIS 1: RATE OF HEAD ENTRIES ACROSS SESSION PER ANIMAL###
@@ -398,9 +502,6 @@ csacqidx["latencyHESEM"]<- latencyHESEM
 #################################################################################
 #ANALYSIS 2.b.: LATENCY OF HEAD ENTRIES ACROSS SESSION PER ANIMAL LAST 15 MIN!###
 #################################################################################
-
-#This allows me to select trials from the half to the end
-round(length(parseddata[[1]]$trials$latency)/2):length(parseddata[[1]]$trials$latency)
 
 #This takes the latency of the last half of the trials, subsets the trials in which the latency was different from 10 (Correct trials) and calculates the mean.
 latencyHElastHALF <- mean(parseddata[[1]]$trials$latency[round(length(parseddata[[1]]$trials$latency)/2):length(parseddata[[1]]$trials$latency)][parseddata[[1]]$trials$latency[round(length(parseddata[[1]]$trials$latency)/2):length(parseddata[[1]]$trials$latency)]!=10])
@@ -500,106 +601,6 @@ for (i in 1:length(parseddata)){
 csacqidx["ITIHEntPerSec"]<- ITIHEntPerSec
 
 
-#####################################
-#ANALYSIS 5: DATA PER BIN         ###
-#####################################
-
-rateHEbin <-c()
-latencyHEbin <- c()
-latencyITIbin <- c()
-subjectbin <- c()
-sessionbin <- c()
-groupbin <- c()
-
-check<- c()
-
-for (j in 1:length(parseddata)){
-        for( i in 1:(length(sessionticks)-1)){
-                rateHEbin <- c(rateHEbin, as.numeric(table(parseddata[[j]]$trials$reward[parseddata[[j]]$trials$bin==i])["TRUE"])/length(parseddata[[j]]$trial$reward[parseddata[[j]]$trials$bin==i]))
-                latencyHEbin <- c(latencyHEbin, mean(subset(parseddata[[j]]$trials$latency[parseddata[[j]]$trials$bin==i], parseddata[[j]]$trials$latency[parseddata[[j]]$trials$bin==i] != (10))))
-                latencyITIbin <- c(latencyITIbin, mean(parseddata[[j]]$ITIcomparison$latencyITI[parseddata[[j]]$ITIcomparison$bin==i]))
-        }
-        subjectbin=c(subjectbin, rep(csacqidx[j,1],6))
-        sessionbin=c(sessionbin, rep(csacqidx[j,2],6))
-        groupbin=c(groupbin, rep(csacqidx[j,3],6))
-}
-
-#There's some NA which are animals that didn't make any correct trials in that bin (No TRUE values in parseddata$trials$reward, that's why it comes up as NA)
-rateHEbin[is.na(rateHEbin)] <- 0
-latencyHEbin[is.nan(latencyHEbin)] <- 10
-
-#Let's make a data frame with data per bin
-
-dataperbin<- data.frame(
-        rat=subjectbin, 
-        session=sessionbin, 
-        group=groupbin,
-        bin=rep(1:6, length(parseddata)), 
-        rateHE=rateHEbin, 
-        latency=latencyHEbin, 
-        latencyITI=latencyITIbin,
-        latencyCUEvsITI=latencyITIbin-latencyHEbin)
-
-
-###############################################
-### DATA FOR YOKING ###########################
-###############################################
-
-#I want to know, on average, how many CS-Rew pairings and how many CS alone presentations did the Bilateral AP5 group received each day.
-
-idx <- csacqidx$group==" BILATAP5"
-BilatAP5cases <- (1:length(csacqidx$group))[idx]
-
-CSRew <- c()
-CSMiss <- c()
-
-for(i in 1:length(csacqidx$subject)){
-        CSRew[i] <- length(parseddata[[i]]$trials$reward[parseddata[[i]]$trials$reward==T])
-        CSMiss[i] <- length(parseddata[[i]]$trials$reward[parseddata[[i]]$trials$reward==F])
-}
-
-csacqidx$CSRew <- CSRew
-csacqidx$CSMiss <- CSMiss
-
-AP5onlySumm <- csacqidx %>% filter(group==" BILATAP5") %>% group_by(session) %>% 
-        summarise(meanCSRew=mean(CSRew), meanCSMiss=mean(CSMiss), meanTotalTrials=mean(CSRew)+mean(CSMiss))
-
-extraCues <- c()
-for(i in 1:nrow(csacqidx)){
-        sess <- csacqidx[i,]$session
-        AP5thatDay <- filter(AP5onlySumm, session==sess)
-        totalTrialsAP5 <- round(AP5thatDay$meanTotalTrials,0)
-        if(csacqidx[i,]$group==" BILATAP5"){a <- 0} 
-        else {a <- totalTrialsAP5-(csacqidx[i,]$CSRew+csacqidx[i,]$CSMiss)}
-        extraCues <- c(extraCues, a)
-}
-
-csacqidx$extraCues <- extraCues
-
-YokingData <- csacqidx %>% group_by(group, session) %>% 
-        summarise(meanCSRew=round(mean(CSRew),0),
-                  semCSRew=sd(CSRew)/sqrt(length(CSRew)),
-                  meanCSMiss=round(mean(CSMiss),0), 
-                  semCSMiss=sd(CSMiss)/sqrt(length(CSMiss)),
-                  total=meanCSRew+meanCSMiss,
-                  meanRateHE=meanCSRew/total,
-                  semRateHE= sd(RateHE)/sqrt(length(RateHE)),
-                  meanextraCues=round(mean(extraCues, na.rm=T),0),
-                  semextraCues=sd(extraCues)/sqrt(length(extraCues)),
-                  n=length(CSRew))
-
-YokingData$session <- as.numeric(YokingData$session)
-
-AP5only <- YokingData %>% filter(group==" BILATAP5") 
-
-
-######################################################################
-# TOTAL NUMBER OF TRIALS                                           ###
-######################################################################
-
-csacqidx$TotalTrials <- csacqidx$CSRew + csacqidx$CSMiss + csacqidx$extraCues
-
-
 
 #####################################
 #ANALYSIS 5: DATA PER BIN         ###
@@ -617,7 +618,7 @@ check<- c()
 
 for (j in 1:length(parseddata)){
         for( i in 1:(length(sessionticks)-1)){
-                rateHEbin <- c(rateHEbin, sum(parseddata[[j]]$trials$reward[parseddata[[j]]$trials$bin==i])/length(parseddata[[j]]$trial$reward[parseddata[[j]]$trials$bin==i]))
+                rateHEbin <- c(rateHEbin, as.numeric(table(parseddata[[j]]$trials$reward[parseddata[[j]]$trials$bin==i])["TRUE"])/length(parseddata[[j]]$trial$reward[parseddata[[j]]$trials$bin==i]))
                 latencyHEbin <- c(latencyHEbin, mean(subset(parseddata[[j]]$trials$latency[parseddata[[j]]$trials$bin==i], parseddata[[j]]$trials$latency[parseddata[[j]]$trials$bin==i] != (10))))
                 latencyITIbin <- c(latencyITIbin, mean(parseddata[[j]]$ITIcomparison$latencyITI[parseddata[[j]]$ITIcomparison$bin==i], na.rm=T))
                 ITIperSecbin <- c(ITIperSecbin, mean(parseddata[[j]]$ITIcomparison$ITIentries[parseddata[[j]]$ITIcomparison$bin==i]/parseddata[[j]]$ITIcomparison$ITIlength[parseddata[[j]]$ITIcomparison$ITIlength]))
@@ -647,6 +648,37 @@ dataperbin<- data.frame(
         latencyCUEvsITI=latencyITIbin-latencyHEbin2,
         ITIperSec = ITIperSecbin)
 
+###############################################
+### DATA FOR YOKING ###########################
+###############################################
+
+#I want to know, on average, how many CS-Rew pairings and how many CS alone presentations did the Bilateral AP5 group received each day.
+
+idx <- csacqidx$group==" BILATAP5"
+BilatAP5cases <- (1:length(csacqidx$group))[idx]
+
+CSRew <- c()
+CSMiss <- c()
+
+for(i in 1:length(csacqidx$subject)){
+        CSRew[i] <- length(parseddata[[i]]$trials$reward[parseddata[[i]]$trials$reward==T])
+        CSMiss[i] <- length(parseddata[[i]]$trials$reward[parseddata[[i]]$trials$reward==F])
+}
+
+csacqidx$CSRew <- CSRew
+csacqidx$CSMiss <- CSMiss
+
+YokingData <- ddply(csacqidx, c("group", "session"), summarise, 
+                    N=length(CSRew),
+                    meanCSRew=round(mean(CSRew), 0),
+                    meanCSMiss=round(mean(CSMiss),0))
+
+
+######################################################################
+#ANALYSIS 5b: TOTAL NUMBER OF TRIALS                               ###
+######################################################################
+
+csacqidx$TotalTrials <- csacqidx$CSRew + csacqidx$CSMiss
 
 
 #############################################################
@@ -654,9 +686,10 @@ dataperbin<- data.frame(
 #############################################################
 
 # Number of trials Bilateral AP5 animals on day 1
+sessionName <- "EXTTTEST"
 vec1 <- c()
 idx <- 1:length(csacqidx$subject)
-sess1BilAP5idx <- idx[csacqidx$session==1 & csacqidx$group==" BILATAP5"]
+sess1BilAP5idx <- idx[csacqidx$session==sessionName & csacqidx$group==" BILATAP5"]
 for(i in sess1BilAP5idx){
         vec1 <- c(vec1, length(parseddata[[i]]$trials$trial))
 }
@@ -664,7 +697,7 @@ for(i in sess1BilAP5idx){
 # Number of trials Yoked Veh animals on day 1
 vec2 <- c()
 idx <- 1:length(csacqidx$subject)
-sess1Vehidx <- idx[csacqidx$session==1 & csacqidx$group==" YOKEDVEH"]
+sess1Vehidx <- idx[csacqidx$session==sessionName & csacqidx$group==" YOKEDVEH"]
 for(i in sess1Vehidx){
         vec2 <- c(vec2, length(parseddata[[i]]$trials$trial))
 }
@@ -687,29 +720,236 @@ HalvesSess1AP5 <- dataPerHalf[sess1BilAP5idx]
 HalvesSess1VEH <- dataPerHalf[sess1Vehidx]
 
 
+#### TEST SESSION BY TRIAL ####
+
+# First, since not all animals got the same number of trials, let's find what was the minimum number of trials and let's only look at that number for all animals
+
+minNoTrials <- min(c(vec1, vec2)) 
+
+DataPerTrial <- c()
+for(i in 1:length(parseddata)){
+        for(j in 1:minNoTrials){
+                DataPerTrial <- rbind(DataPerTrial,
+                                      c(csacqidx$subject[i],
+                                        csacqidx$group[i],
+                                        j,
+                                        parseddata[[i]]$trials$reward[parseddata[[i]]$trials$trial==j],
+                                        parseddata[[i]]$trials$latency[parseddata[[i]]$trials$trial==j],
+                                        parseddata[[i]]$trials$numITIentries[parseddata[[i]]$trials$trial==j],
+                                        parseddata[[i]]$trials$lengthITI[parseddata[[i]]$trials$trial==j],
+                                        parseddata[[i]]$trials$numITIentries[parseddata[[i]]$trials$trial==j]/parseddata[[i]]$trials$lengthITI[parseddata[[i]]$trials$trial==j]
+                                      ))
+        }
+}
+
+subject<-c()
+group <- c()
+trial <- c()
+reward <- c()
+latency <- c()
+TaskAcc <- c()
+numITIentries <- c()
+lengthITI <- c()
+ITIperSec <- c()
+
+for(i in 1:length(parseddata)){
+        for(j in 1:minNoTrials){
+                subject <- c(subject, csacqidx$subject[i])
+                group <- c(group,csacqidx$group[i])
+                trial <- c(trial, j)
+                reward <- c(reward, parseddata[[i]]$trials$reward[parseddata[[i]]$trials$trial==j])
+                latency <- c(latency, parseddata[[i]]$trials$latency[parseddata[[i]]$trials$trial==j])
+                TaskAcc <- c(TaskAcc, parseddata[[i]]$ITIcomparison$TaskAcc[parseddata[[i]]$trials$trial==j])
+                numITIentries <- c(numITIentries, parseddata[[i]]$trials$numITIentries[parseddata[[i]]$trials$trial==j])
+                lengthITI <- c(lengthITI, parseddata[[i]]$trials$lengthITI[parseddata[[i]]$trials$trial==j])
+                ITIperSec <- c(ITIperSec, parseddata[[i]]$trials$numITIentries[parseddata[[i]]$trials$trial==j]/parseddata[[i]]$trials$lengthITI[parseddata[[i]]$trials$trial==j])
+        }
+}
+
+DataPerTrial <- data.frame(subject, group, trial, reward, latency, TaskAcc, numITIentries, lengthITI, ITIperSec)
+
+DataPerTrial$latency[which(DataPerTrial$latency==10)] <- NaN
+
+
+DataPerTrialSumm <- ddply(DataPerTrial, c("group", "trial"), summarise,
+                          N=length(subject),
+                          meanITIperSec=mean(ITIperSec),
+                          sdITI=sd(ITIperSec),
+                          seITI=sdITI/sqrt(N),
+                          meanRateHE=length(reward[reward==T])/N,
+                          sdRateHE=sd(mean(length(reward[reward==T]))),
+                          seRateHE=sdRateHE/sqrt(N),
+                          meanlatency=mean(latency[which(latency!=10)], na.rm=T),
+                          sdLat=sd(latency, na.rm=T),
+                          seLat=sdLat/sqrt(N), 
+                          meanTaskAcc=mean(TaskAcc),
+                          sdTA=sd(TaskAcc),
+                          seTA=sdTA/sqrt(N)
+)
+
+############################################################################
+### DATA FOR PERIEVENT HISTOGRAM (ENTRIES AROUND TIME OF CUE ONSET) ########
+############################################################################
+
+# I want a dataframe in which:
+## ## - Subject
+## ## - Session
+## ## - Trial
+## ## - Cue onset
+## ## - 40 tickmarks of 0.5ms around cue onset (20 before, 20 after)
+## ## - Entry Y/N: was an entry made by that animal on that bin before/after cue onset?
+## The number of rows is going to be 40*Number of trials*Sessions
+
+
+binlength <- 1 #in sec
+window <- 15 #in sec
+tickmarks<- seq(-window, +window, by=binlength)
+#This gives us 41 values. We'll drop the last one because 10s is not a bin, is the end of the last bin.
+tickmarks<- tickmarks[-length(tickmarks)]
+
+
+#Let's make our data.frame
+subject<- c()
+group <- c()
+session<- c()
+trial<- c()
+cueStart<- c()
+bin<- c()
+entry<- c()
+
+for(i in 1:length(csacqdata)){
+        for(j in 1:length(csacqdata[[i]]$cuestart)){
+                for(k in 1:length(tickmarks)){
+                        
+                        subject<- c(subject,csacqidx$subject[i])
+                        group <- c(group, csacqidx$group[i])
+                        session<- c(session, csacqidx$session[i])
+                        trial <- c(trial, j)
+                        cueStart <- c(cueStart, parseddata[[i]]$trials$start[j])
+                        bin <- c(bin, tickmarks[k])
+                        if(length(csacqdata[[i]]$entries[csacqdata[[i]]$entries>(csacqdata[[i]]$cuestart[j]+tickmarks[k]) & csacqdata[[i]]$entries<(csacqdata[[i]]$cuestart[j]+tickmarks[k]+binlength)])==0){check<- FALSE} else {check<-TRUE}
+                        entry <- c(entry, check) 
+                }
+        }
+}
+
+PETH <- data.frame(subject=subject, group=group, session=session, trial=trial, cueStart=cueStart, bin=bin, entry=entry)
+
+
+
+PETHsumm <- PETH %>% filter(trial>=1 & trial<=5) %>% group_by(group, bin) %>% summarise(ratio=sum(entry)/length(trial))
+
+ggplot(PETHsumm, aes(x=bin, y=ratio, col=group))+geom_line()
 
 #SaVING RAW DATA
-save(csacqidx, file=paste(getwd(), "/Data for R/csacqidx.ridx", sep=""))
-save(csacqdata, file=paste(getwd(), "/Data for R/csacqdata.rdat", sep=""))
-save(dataperbin, file=paste(getwd(), "/Data for R/dataperbin.rdat", sep=""))
-save(parseddata, file=paste(getwd(), "/Data for R/parseddata.rdat", sep=""))
-save(dataPerHalf,file=paste(getwd(), "/Data for R/dataPerHalf.rdat", sep=""))
-save(YokingData, file=paste(getwd(), "/Data for R/YokingData.rdat", sep=""))
+save(csacqidx, file="C:/Users/Mercedes/Desktop/OneDrive - Cuny GradCenter/Experiment 2b/Test/Data for R/csacqidx.ridx")
+save(csacqdata, file="C:/Users/Mercedes/Desktop/OneDrive - Cuny GradCenter/Experiment 2b/Test/Data for R/csacqdata.rdat")
+save(dataperbin, file="C:/Users/Mercedes/Desktop/OneDrive - Cuny GradCenter/Experiment 2b/Test/Data for R/dataperbin.rdat")
+save(parseddata, file="C:/Users/Mercedes/Desktop/OneDrive - Cuny GradCenter/Experiment 2b/Test/Data for R/parseddata.rdat")
+save(dataPerHalf,file="C:/Users/Mercedes/Desktop/OneDrive - Cuny GradCenter/Experiment 2b/Test/Data for R/dataPerHalf.rdat" )
+save(DataPerTrial,file="C:/Users/Mercedes/Desktop/OneDrive - Cuny GradCenter/Experiment 2b/Test/Data for R/DataPerTrial.rdat" )
+save(DataPerTrialSumm,file="C:/Users/Mercedes/Desktop/OneDrive - Cuny GradCenter/Experiment 2b/Test/Data for R/DataPerTrialSumm.rdat" )
+save(PETH,file="C:/Users/Mercedes/Desktop/OneDrive - Cuny GradCenter/Experiment 2b/Test/Data for R/PETH.rdat" )
 
 
-# #LOADING RAW DATA
-# load(file=paste(getwd(), "/Data for R/csacqidx.ridx", sep=""))
-# load(file=paste(getwd(), "/Data for R/csacqdata.rdat", sep=""))
-# load(file=paste(getwd(), "/Data for R/dataperbin.rdat", sep=""))
-# load(file=paste(getwd(), "/Data for R/parseddata.rdat", sep=""))
-# load(file=paste(getwd(), "/Data for R/dataPerHalf.rdat", sep=""))
-# load(file=paste(getwd(), "/Data for R/YokingData.rdat", sep="))
+#LOADING RAW DATA
+load("C:/Users/Mercedes/Desktop/OneDrive - Cuny GradCenter/Experiment 2b/Test/Data for R/csacqidx.ridx")
+load("C:/Users/Mercedes/Desktop/OneDrive - Cuny GradCenter/Experiment 2b/Test/Data for R/csacqdata.rdat")
+load("C:/Users/Mercedes/Desktop/OneDrive - Cuny GradCenter/Experiment 2b/Test/Data for R/parseddata.rdat")
+load("C:/Users/Mercedes/Desktop/OneDrive - Cuny GradCenter/Experiment 2b/Test/Data for R/dataperbin.rdat")
+load("C:/Users/Mercedes/Desktop/OneDrive - Cuny GradCenter/Experiment 2b/Test/Data for R/dataPerHalf.rdat")
+load("C:/Users/Mercedes/Desktop/OneDrive - Cuny GradCenter/Experiment 2b/Test/Data for R/DataPerTrial.rdat")
+load("C:/Users/Mercedes/Desktop/OneDrive - Cuny GradCenter/Experiment 2b/Test/Data for R/DataPerTrialSumm.rdat")
+load("C:/Users/Mercedes/Desktop/OneDrive - Cuny GradCenter/Experiment 2b/Test/Data for R/PETH.rdat")
+
+
 
 ########## ANOVA #####################
 
-# This is a mixed ANOVA with Group as a between-subjects factor and Session as a within subject factor
+# This is a mixed ANOVA with GROUP as a between-subjects factor and BIN as a within subject factor
 
-aov_group_session_RateHE <- aov (RateHE ~ group*session + Error(subject/session), data=csacqidx)
-summary(aov_group_session_RateHE)
+# Effects of group and bin on Rate of head entries per bin
+aov_group_bin_RateHE <- aov (ITIperSec ~ group*bin + Error(rat/bin), data=dataperbin)
+summary(aov_group_bin_RateHE)
+
+# Effects of group and bin on ITI ENTRIES/SEC per bin
+aov_group_bin_ITIperSec <- aov (ITIperSec ~ group*bin + Error(rat/bin), data=dataperbin)
+summary(aov_group_bin_ITIperSec)
+
+# Effects of group and bin on Latency Post cue vs. Pre Cue per bin
+aov_group_bin_TaskAcc <- aov (latencyCUEvsITI ~ group*bin + Error(rat/bin), data=dataperbin)
+summary(aov_group_bin_TaskAcc)
+
+# Effects of group on total time spent in receptacle 10s after cue vs. 10s before the cue throughout the whole session
+
+#Test homoscedastity
+install.packages("lawstat")
+library(lawstat)
+
+with(csacqidx, levene.test(durDiffSUMALLTRIALS, as.factor(group))) #Equal variances TRUE
+
+ttest_group_SumDurEntryDiffALL <- t.test(durDiffSUMALLTRIALS ~ group, paired=FALSE, data=csacqidx, alternative="less", var.equal=TRUE)
+ttest_group_SumDurEntryDiffALL
 
 
+# Effects of group on latency to enter receptacle 10s after cue vs. 10s before the cue (random ITI window) throughout the whole session
+with(csacqidx, levene.test(latencyCUEvsITIHE, as.factor(group))) #Equal variances TRUE
+
+ttest_group_TASKACCL <- t.test(latencyCUEvsITIHE ~ group, paired=FALSE, data=csacqidx, var.equal=TRUE)
+ttest_group_TASKACCL
+
+########### ADDITIONAL GRAPHS FOR POSTER ###########
+colindx1=c("#ffb521", "#dcf0f0")
+colindx2=c("#eb7f00", "#539e9e")
+
+#### Sum of diff of time spent inside compartment post cue vs. pre cue (10s window)
+plot.new()
+plot.window(xlim=c(0.5, 2.5), ylim=c(-10, 40))
+
+abline(h=seq(-10, 40, 10), col="gray75")
+axis(side=1, at=c(1, 2), labels=c("AP5/VEH", "VEH/VEH"), font=2, cex.axis=2.2, lwd=0)
+axis(side=2, at=seq(-10, 40, 10), font=2, cex.axis=2.2, las=2)
+
+for(i in 1:length(unique(csacqidx$group))){
+        sel <- filter(csacqidx, group==unique(csacqidx$group)[[i]])
+        rect(xleft = i-0.5, xright = i+0.5, ybottom=0, ytop=mean(sel$durDiffSUMALLTRIALS), col=colindx1[i])
+        points(x=rep(i+0.1, nrow(sel)), y=sel$durDiffSUMALLTRIALS, pch=21, col="black", bg=colindx2[i], cex=1.2)
+        arrows(x0=i, x1=i, y0=mean(sel$durDiffSUMALLTRIALS), y1=mean(sel$durDiffSUMALLTRIALS)+sd(sel$durDiffSUMALLTRIALS)/sqrt(nrow(sel)), length=0.25, angle=90)
+        arrows(x0=i, x1=i, y0=mean(sel$durDiffSUMALLTRIALS), y1=mean(sel$durDiffSUMALLTRIALS)-sd(sel$durDiffSUMALLTRIALS)/sqrt(nrow(sel)), length=0.25, angle=90)
+}
+
+
+for(i in 1:length(unique(csacqidx$group))){
+        sel=filter(csacqidx, group==unique(csacqidx$group)[i])
+        points(x=rep(i, nrow(sel)), y=sel$durDiffSUMALLTRIALS, pch=21, bg=colindx2[i], col="black", cex=1.3)
+}
+
+
+#### BOXPLOT OF TASK ACCURACY DURING LAST SESSION
+pdf (paste(graphdir, "Exp 2b extinction test ACC LAT barplot.pdf", sep=""), width=8, height=7) 
+
+plot.new()
+plot.window(xlim=c(0.5, 2.5), ylim=c(-0.4, 2.8))
+
+abline(h=seq(-0.4, 2.8, 0.4), col="gray75")
+axis(side=1, at=c(1, 2), labels=c("AP5/VEH", "VEH/VEH"), font=2, cex.axis=2.2, lwd=0)
+axis(side=2, at=seq(-0.4, 2.8, 0.4), font=2, cex.axis=2.2, las=2)
+
+boxplot(latencyCUEvsITIHE ~ group, data=csacqidx, col=colindx1, axes=F, add=T)
+ 
+colindx2=c("#eb7f00", "#539e9e")
+for(i in 1:length(unique(csacqidx$group))){
+         sel=filter(csacqidx, group==unique(csacqidx$group)[i])
+         points(x=rep(i, nrow(sel)), y=sel$latencyCUEvsITIHE, pch=21, bg=colindx2[i], col="black", cex=1.3)
+ }
+
+
+
+for(i in 1:length(unique(csacqidx$group))){
+        sel <- filter(csacqidx, group==unique(csacqidx$group)[[i]])
+        rect(xleft = i-0.5, xright = i+0.5, ybottom=0, ytop=mean(sel$latencyCUEvsITIHE), col=colindx1[i])
+        points(x=rep(i+0.1, nrow(sel)), y=sel$latencyCUEvsITIHE, pch=21, col="black", bg=colindx2[i], cex=1.2)
+        arrows(x0=i, x1=i, y0=mean(sel$latencyCUEvsITIHE), y1=mean(sel$latencyCUEvsITIHE)+sd(sel$latencyCUEvsITIHE)/sqrt(nrow(sel)), length=0.25, angle=90)
+        arrows(x0=i, x1=i, y0=mean(sel$latencyCUEvsITIHE), y1=mean(sel$latencyCUEvsITIHE)-sd(sel$latencyCUEvsITIHE)/sqrt(nrow(sel)), length=0.25, angle=90)
+}
+dev.off()
